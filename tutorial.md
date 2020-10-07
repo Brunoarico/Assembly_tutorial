@@ -33,11 +33,9 @@ O make file é um arquivo composto de diretivas tais como:
 clean:
   rm *.o
 
-diz_oi:
+diz_oi: clean
   echo "ola"
 
-print_file: teste.txt
-  cat teste.txt
 ~~~
 
 Cada uma dessas diretivas executa as ações que estão sob as respectivas identações, dessa forma ao digitarmos no terminal:
@@ -48,7 +46,11 @@ Cada uma dessas diretivas executa as ações que estão sob as respectivas ident
 
 Todos os arquivos que batem com a expressão regular *.o serão apagados do diretorio que contem o makefile.
 
-Quando precisamos passsar um arquivo especifico para umas diretivas operar, como é o caso do cat ali no exemplo, passamos esse arquivo na frente da declaração da diretiva como no exemplo.
+E se executarmos:
+~~~ sh
+make diz_oi  
+~~~
+Inicialmente ele limpa todos os arquivos *.o* do diretorio e então printa "ola"
 
 # Parte 1
 
@@ -144,3 +146,84 @@ Consultem a documentação do gcc ou o google (recomendo essa opção) para ente
  ~~~
 
  este é um otimo inicio para um makefile
+
+
+ # Parte 2
+
+Aqui começa realmente a implementação de coisas em Assembly. Nesta parte temos que entender como que o GCC compila as coisas.
+O compilador basicamente converte um código C em um codigo de mais baixo nivel, o assembly, o qual internamente usa um assembler para gerar os binarios que correspondem aos dados que estão encodados no programa. Este arquivo gerado é o que chamamos de arquivo objeto. Um programa é composto de um ou mais arquivos objetos, como por exemplo as bibliotecas que o compoe tambem tem arquivos objetos correspondentes. Assim quando o compilador compila, ate esse momento temos uma sequência de arquivos objeto (.o) que precisam ser ligados, esse processo de ligação chama-se linkage. E quem cuida disso é um utilitario que o próprio GCC vai gerenciar que é o **ld**.
+
+Ou seja quando executamos a linha de compilação:
+
+~~~
+gcc -o sieve.c sieve
+~~~
+
+O arquivo *sieve.c* sera convertido para linguagem de máquina (Assembly) e então para binário que estará disponível em um *sieve.o*, esse sieve.o se ligara aos *.o* das bibliotecas padrão e então gerara o binario do arquivo executabel *sieve*. O GCC faz esse processo ser basicamente transparente, mas quando trabalhamos com arquivos *.s* necessitamos fazer esse processo manualmente.
+
+Suponha que tenho o seguinte arquivo em C, *soma.c*:
+
+~~~ C
+#include <stdio.h>
+
+int add(int a, int b);
+
+int main(int argc, char **argv) {
+  printf("%d\n", add(2, 6));
+  return 0;
+}
+
+~~~
+
+A função add tem sua declaração feita, mas não esta implementada, ao tentarmos compilar esse arquivo com o GCC ele dira que nós não temos nada chamado **add** pra ele colocar no lugar ali. Ou seja, no arquivo *.o* gerado ele tera a declaração mas não a referência para o conteudo do que essa função faz. O que podemos fazer é um "puxadinho no arquivo" incluindo um *.o* na compilação que possua o que essa função faz. Ai que entra o arquivo *.s*.
+
+Suponha que temos o arquivo *sub.s*:
+(não nos atentemos as funcionalidades dos mnemônicos do assembly ainda)
+
+~~~
+global add
+
+section .data
+
+section .text
+
+add:
+    push ebp                        
+    mov ebp, esp                    
+
+    mov   eax, [esp+4]   
+    add   eax, [esp+8]
+
+    pop ebp
+    ret
+~~~
+
+Perceba que temos uma tag chamada *add* no arquivo e ela esta identificado no começo como global, e fiz questão de chamar o arquivo de *sub* para reforçar que o que vale é o conteudo e não o nome do arquivo. Inclusive ele poderia se chamar *bsdbjfkbs.ahsdahkl* que daria tudo certo, neste nível da computação apenas os bits importam.
+
+Agora, essencialmente, temos tudo que necessitamos para o programa compilar.
+Inicialmente temos que montar o nosso arquivo e quem fara essa tarefa para gerar o nosso *sub.o* é o NASM:
+
+~~~ sh
+nasm -f elf sub.s
+~~~
+
+Automagicamente será gerado um arquivo *sub.o*
+(Outra curiosidade que esse processo de tradução dos mnemonicos pode ser executado manualmente para arquiteturas mais simples como 8 bits, recomendo para quem quiser entender onde o software acaba e o hardware começa a fazer esse processo. Existem emuladores de cpu 8bits como a do z80 para testar o código)
+
+Agora podemos fazer a ligação de todas as partes e para isso podemos usar a linha:
+
+~~
+gcc -o soma add.o soma.c -m32
+~~
+
+Na execução desta linha temos que o GCC verifica que o arquivo *sub.o* já é um objeto, e converte o *soma.c* para *soma.o*, e os linka, gerando o output de nome soma.
+A flag **-m32** serve para identificar que a arquiteturapara a qual sera compilada é de 32 bits, e a flag **-o** é para definir o nome do output que será *soma*.  
+
+Para executar o binário basta de um terminal executando dentro do diretorio em questão:
+
+~~
+./soma
+~~
+
+ Esse processo aqui apresentado é analogo ao que será executado com o *is_prime.s* e o *sieve_asm.c*. Disuctiremos detalhes da implementação em assembly a seguir.
+ No makefile certifique-se de seguir a sequência correta de compilação. Primeiro tem que ser feito o *is_prime.o* para aí sim compilar o *sieve_asm.c*.
